@@ -67,6 +67,12 @@
     background: linear-gradient(180deg, #BBBBBB, #AAAAAA);
     box-shadow: inset 0 1px 2px rgba(0,0,0,0.25);
   }
+  #toolbar button .ico {
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+    font-size: 13px;
+    margin-right: 2px;
+    vertical-align: -1px;
+  }
   #toolbar .spacer { flex: 1; }
   #toolbar .status {
     font-size: 11px; color: #333;
@@ -164,6 +170,20 @@
     font-weight: bold;
   }
   .dialog footer button.primary:hover { background: linear-gradient(180deg, #6BB0F8, #3A80D2); }
+  .dialog.wide {
+    max-width: 95vw;
+    width: 95vw;
+  }
+  #gantt-body {
+    padding: 0;
+    overflow: auto;
+    background: #FFFFFF;
+    max-height: calc(85vh - 90px);
+  }
+  #gantt-canvas {
+    display: block;
+    background: #FFFFFF;
+  }
   .deps-list {
     background: #FFF;
     border: 1px solid #888;
@@ -227,18 +247,21 @@
 <body>
   <div id="titlebar">ChoboProject &mdash; PERT Chart</div>
   <div id="toolbar">
-    <button id="btn-new" title="새 작업 추가 (N)">새 작업</button>
-    <button id="btn-edit" title="선택한 작업 편집 (Enter)">편집</button>
-    <button id="btn-delete" title="선택한 작업 삭제 (Delete)">삭제</button>
-    <button id="btn-connect" title="연결 모드 전환 — 작업에서 작업으로 드래그">연결</button>
-    <button id="btn-zoomout" title="축소">&minus;</button>
-    <button id="btn-zoomin" title="확대">+</button>
-    <button id="btn-fit" title="전체 보기 (0)">맞춤</button>
-    <button id="btn-memo" title="프로젝트 메모 (M)">메모</button>
-    <button id="btn-reset" title="한글 예시 프로젝트 불러오기">예시 불러오기</button>
+    <button id="btn-new" title="새 작업 추가 (N)"><span class="ico">➕</span> 새 작업</button>
+    <button id="btn-edit" title="선택한 작업 편집 (Enter)"><span class="ico">✏️</span> 편집</button>
+    <button id="btn-delete" title="선택한 작업 삭제 (Delete)"><span class="ico">🗑️</span> 삭제</button>
+    <button id="btn-connect" title="연결 모드 전환 — 작업에서 작업으로 드래그"><span class="ico">🔗</span> 연결</button>
+    <button id="btn-zoomout" title="축소"><span class="ico">🔍</span>−</button>
+    <button id="btn-zoomin" title="확대"><span class="ico">🔍</span>+</button>
+    <button id="btn-fit" title="전체 보기 (0)"><span class="ico">🖼️</span> 맞춤</button>
+    <button id="btn-memo" title="프로젝트 메모 (M)"><span class="ico">📝</span> 메모</button>
+    <button id="btn-gantt" title="간트 차트 (G)"><span class="ico">📅</span> 간트</button>
+    <button id="btn-export-png" title="PNG 이미지로 저장"><span class="ico">🖼️</span> PNG</button>
+    <button id="btn-export-csv" title="CSV로 저장 (Excel 호환)"><span class="ico">📊</span> CSV</button>
+    <button id="btn-reset" title="한글 예시 프로젝트 불러오기"><span class="ico">📂</span> 예시</button>
     <span class="spacer"></span>
     <span class="status" id="status"></span>
-    <button id="btn-help" title="도움말 (F1)">? 도움말</button>
+    <button id="btn-help" title="도움말 (F1)"><span class="ico">❓</span> 도움말</button>
   </div>
   <div id="stage">
     <canvas id="canvas"></canvas>
@@ -257,6 +280,19 @@
       <header id="memo-title">프로젝트 메모</header>
       <div class="body help-content" id="memo-body"></div>
       <footer><button class="primary" onclick="document.getElementById('modal-memo').classList.remove('open')">확인</button></footer>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-gantt">
+    <div class="dialog wide">
+      <header>간트 차트 — <span id="gantt-title"></span></header>
+      <div class="body" id="gantt-body">
+        <canvas id="gantt-canvas"></canvas>
+      </div>
+      <footer>
+        <button id="gantt-export-png"><span class="ico" style="font-family:'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif;">🖼️</span> PNG 저장</button>
+        <button class="primary" onclick="document.getElementById('modal-gantt').classList.remove('open')">확인</button>
+      </footer>
     </div>
   </div>
 
@@ -282,6 +318,323 @@
 
 <script>
 "use strict";
+var PC;
+(function (PC) {
+    function downloadBlob(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+    function safeFilename(s) {
+        return s.replace(/[\\/:*?"<>|]+/g, "_").replace(/\s+/g, "_") || "project";
+    }
+    function todayStamp() {
+        const d = new Date();
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const dd = String(d.getDate()).padStart(2, "0");
+        return `${y}${m}${dd}`;
+    }
+    function exportPNG(p) {
+        if (p.tasks.length === 0) {
+            alert("내보낼 작업이 없습니다.");
+            return;
+        }
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        p.tasks.forEach(t => {
+            if (t.x < minX)
+                minX = t.x;
+            if (t.y < minY)
+                minY = t.y;
+            if (t.x + PC.BOX_W > maxX)
+                maxX = t.x + PC.BOX_W;
+            if (t.y + PC.BOX_H > maxY)
+                maxY = t.y + PC.BOX_H;
+        });
+        const pad = 40;
+        const w = Math.ceil(maxX - minX) + pad * 2;
+        const h = Math.ceil(maxY - minY) + pad * 2;
+        const scale = 2;
+        const off = document.createElement("canvas");
+        off.width = w * scale;
+        off.height = h * scale;
+        const octx = off.getContext("2d");
+        if (!octx) {
+            alert("Canvas를 사용할 수 없습니다.");
+            return;
+        }
+        octx.setTransform(scale, 0, 0, scale, 0, 0);
+        const exportVs = {
+            selectedId: null,
+            connectingFrom: null,
+            connectingTo: null,
+            panX: -minX + pad,
+            panY: -minY + pad,
+            zoom: 1
+        };
+        PC.draw(octx, p, exportVs, w, h);
+        off.toBlob(blob => {
+            if (!blob) {
+                alert("PNG 생성에 실패했습니다.");
+                return;
+            }
+            downloadBlob(blob, `${safeFilename(p.name)}_${todayStamp()}.png`);
+        }, "image/png");
+    }
+    PC.exportPNG = exportPNG;
+    function csvEscape(v) {
+        const s = String(v);
+        if (/[",\n\r]/.test(s))
+            return '"' + s.replace(/"/g, '""') + '"';
+        return s;
+    }
+    function exportCSV(p) {
+        if (p.tasks.length === 0) {
+            alert("내보낼 작업이 없습니다.");
+            return;
+        }
+        const header = ["ID", "작업명", "기간(일)", "선행작업", "ES", "EF", "LS", "LF", "여유(Slack)", "임계경로"];
+        const rows = p.tasks.map(t => [
+            t.id,
+            t.name,
+            t.duration,
+            t.deps.join(";"),
+            t.es,
+            t.ef,
+            t.ls,
+            t.lf,
+            t.slack,
+            t.critical ? "Y" : ""
+        ].map(csvEscape).join(","));
+        const totalDays = PC.projectDuration(p);
+        const endDate = PC.addDays(p.startDate, totalDays);
+        const meta = [
+            `# 프로젝트,${csvEscape(p.name)}`,
+            `# 시작일,${csvEscape(p.startDate)}`,
+            `# 총 기간(일),${totalDays}`,
+            `# 종료일,${csvEscape(endDate)}`,
+            ""
+        ].join("\r\n");
+        const csv = "\uFEFF" + meta + header.map(csvEscape).join(",") + "\r\n" + rows.join("\r\n") + "\r\n";
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        downloadBlob(blob, `${safeFilename(p.name)}_${todayStamp()}.csv`);
+    }
+    PC.exportCSV = exportCSV;
+})(PC || (PC = {}));
+var PC;
+(function (PC) {
+    PC.GANTT_LABEL_W = 200;
+    PC.GANTT_HEADER_H = 44;
+    PC.GANTT_ROW_H = 28;
+    PC.GANTT_BAR_H = 18;
+    PC.GANTT_DAY_MIN = 18;
+    PC.GANTT_DAY_MAX = 40;
+    function fmtDate(start, dayOffset) {
+        return PC.addDays(start, dayOffset);
+    }
+    function pickDayWidth(totalDays, availableW) {
+        if (totalDays <= 0)
+            return PC.GANTT_DAY_MAX;
+        const fit = (availableW - PC.GANTT_LABEL_W) / totalDays;
+        return Math.max(PC.GANTT_DAY_MIN, Math.min(PC.GANTT_DAY_MAX, fit));
+    }
+    function computeGanttSize(p, availableW) {
+        const days = Math.max(1, PC.projectDuration(p));
+        const dayW = pickDayWidth(days, availableW);
+        const w = PC.GANTT_LABEL_W + days * dayW + 20;
+        const h = PC.GANTT_HEADER_H + p.tasks.length * PC.GANTT_ROW_H + 20;
+        return { w, h, dayW, days };
+    }
+    PC.computeGanttSize = computeGanttSize;
+    function sortedTasks(p) {
+        return p.tasks.slice().sort((a, b) => {
+            if (a.es !== b.es)
+                return a.es - b.es;
+            return a.id.localeCompare(b.id);
+        });
+    }
+    function drawGantt(ctx, p, cssW, cssH) {
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0, 0, cssW, cssH);
+        const days = Math.max(1, PC.projectDuration(p));
+        const dayW = pickDayWidth(days, cssW);
+        const labelW = PC.GANTT_LABEL_W;
+        const headerH = PC.GANTT_HEADER_H;
+        const rowH = PC.GANTT_ROW_H;
+        const barH = PC.GANTT_BAR_H;
+        const tasks = sortedTasks(p);
+        ctx.fillStyle = "#ECECEC";
+        ctx.fillRect(0, 0, cssW, headerH);
+        ctx.fillStyle = "#E0E0E0";
+        ctx.fillRect(0, 0, labelW, headerH);
+        ctx.fillStyle = "#000";
+        ctx.font = 'bold 12px "Lucida Grande", "Geneva", "Apple SD Gothic Neo", sans-serif';
+        ctx.textBaseline = "middle";
+        ctx.textAlign = "left";
+        ctx.fillText("작업 (ID — 이름)", 8, headerH / 2);
+        ctx.strokeStyle = "#DDD";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let d = 0; d <= days; d++) {
+            const x = labelW + d * dayW;
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, cssH);
+        }
+        ctx.stroke();
+        const labelStep = dayW >= 32 ? 1 : dayW >= 22 ? 2 : dayW >= 16 ? 5 : 7;
+        const dateStep = Math.max(7, labelStep);
+        ctx.fillStyle = "#333";
+        ctx.font = '10px "Geneva", "Apple SD Gothic Neo", sans-serif';
+        ctx.textAlign = "center";
+        for (let d = 0; d <= days; d += labelStep) {
+            const x = labelW + d * dayW;
+            ctx.fillStyle = d === 0 ? "#000" : "#555";
+            ctx.fillText(String(d), x, 12);
+        }
+        ctx.font = '10px "Geneva", "Apple SD Gothic Neo", sans-serif';
+        for (let d = 0; d <= days; d += dateStep) {
+            const x = labelW + d * dayW;
+            ctx.fillStyle = "#000";
+            ctx.fillText(fmtDate(p.startDate, d), x, 30);
+        }
+        ctx.strokeStyle = "#888";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, headerH);
+        ctx.lineTo(cssW, headerH);
+        ctx.moveTo(labelW, 0);
+        ctx.lineTo(labelW, cssH);
+        ctx.stroke();
+        ctx.textBaseline = "middle";
+        tasks.forEach((t, i) => {
+            const y = headerH + i * rowH;
+            if (i % 2 === 1) {
+                ctx.fillStyle = "#F7F7F7";
+                ctx.fillRect(0, y, cssW, rowH);
+            }
+            ctx.fillStyle = t.critical ? "#CC0000" : "#000";
+            ctx.font = 'bold 11px "Lucida Grande", "Apple SD Gothic Neo", sans-serif';
+            ctx.textAlign = "left";
+            const label = `${t.id} — ${t.name}`;
+            ctx.fillText(clipGantt(ctx, label, labelW - 12), 8, y + rowH / 2);
+            const bx = labelW + t.es * dayW;
+            const bw = Math.max(2, t.duration * dayW);
+            const by = y + (rowH - barH) / 2;
+            ctx.fillStyle = t.critical ? "#CC0000" : "#3B7BD9";
+            ctx.fillRect(bx, by, bw, barH);
+            ctx.strokeStyle = t.critical ? "#7A0000" : "#1A4F8A";
+            ctx.lineWidth = 1;
+            ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, barH - 1);
+            if (t.slack > 0) {
+                const sx = labelW + t.ef * dayW;
+                const sw = t.slack * dayW;
+                ctx.fillStyle = "rgba(59,123,217,0.18)";
+                ctx.fillRect(sx, by + 4, sw, barH - 8);
+                ctx.strokeStyle = "#7AA3DA";
+                ctx.setLineDash([3, 3]);
+                ctx.strokeRect(sx + 0.5, by + 4.5, sw - 1, barH - 9);
+                ctx.setLineDash([]);
+            }
+            ctx.fillStyle = "#FFF";
+            ctx.font = 'bold 11px "Geneva", "Apple SD Gothic Neo", sans-serif';
+            ctx.textAlign = "left";
+            const barLabel = `${t.duration}일`;
+            if (ctx.measureText(barLabel).width + 8 <= bw) {
+                ctx.fillText(barLabel, bx + 4, by + barH / 2);
+            }
+            else {
+                ctx.fillStyle = "#000";
+                ctx.fillText(barLabel, bx + bw + 4, by + barH / 2);
+            }
+        });
+        const indexById = new Map();
+        tasks.forEach((t, i) => indexById.set(t.id, i));
+        ctx.strokeStyle = "rgba(80,80,80,0.55)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        tasks.forEach((t, i) => {
+            t.deps.forEach(d => {
+                const pi = indexById.get(d);
+                if (pi === undefined)
+                    return;
+                const pre = tasks[pi];
+                const x1 = labelW + pre.ef * dayW;
+                const y1 = headerH + pi * rowH + rowH / 2;
+                const x2 = labelW + t.es * dayW;
+                const y2 = headerH + i * rowH + rowH / 2;
+                const mx = x2 - 4;
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(mx, y1);
+                ctx.lineTo(mx, y2);
+                ctx.lineTo(x2, y2);
+            });
+        });
+        ctx.stroke();
+        ctx.font = '10px "Geneva", "Apple SD Gothic Neo", sans-serif';
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "#000";
+        const totalDays = PC.projectDuration(p);
+        const endDate = PC.addDays(p.startDate, totalDays);
+        ctx.fillText(`총 ${totalDays}일 · ${p.startDate} ~ ${endDate}`, cssW - 8, 12);
+        ctx.fillText("■ 임계경로  ■ 일반  ░ 여유", cssW - 8, 30);
+    }
+    PC.drawGantt = drawGantt;
+    function clipGantt(ctx, s, maxW) {
+        if (ctx.measureText(s).width <= maxW)
+            return s;
+        let lo = 0, hi = s.length;
+        while (lo < hi) {
+            const mid = (lo + hi + 1) >> 1;
+            if (ctx.measureText(s.slice(0, mid) + "…").width <= maxW)
+                lo = mid;
+            else
+                hi = mid - 1;
+        }
+        return s.slice(0, lo) + "…";
+    }
+    function exportGanttPNG(p) {
+        if (p.tasks.length === 0) {
+            alert("내보낼 작업이 없습니다.");
+            return;
+        }
+        const size = computeGanttSize(p, 1600);
+        const scale = 2;
+        const off = document.createElement("canvas");
+        off.width = size.w * scale;
+        off.height = size.h * scale;
+        const octx = off.getContext("2d");
+        if (!octx) {
+            alert("Canvas를 사용할 수 없습니다.");
+            return;
+        }
+        octx.setTransform(scale, 0, 0, scale, 0, 0);
+        drawGantt(octx, p, size.w, size.h);
+        off.toBlob(blob => {
+            if (!blob) {
+                alert("PNG 생성에 실패했습니다.");
+                return;
+            }
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            const safe = p.name.replace(/[\\/:*?"<>|]+/g, "_").replace(/\s+/g, "_") || "project";
+            const d = new Date();
+            const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+            a.href = url;
+            a.download = `${safe}_gantt_${stamp}.png`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }, "image/png");
+    }
+    PC.exportGanttPNG = exportGanttPNG;
+})(PC || (PC = {}));
 var PC;
 (function (PC) {
     PC.HELP_HTML = `
@@ -409,6 +762,28 @@ var PC;
     function openHelp() {
         $("help-body").innerHTML = PC.HELP_HTML;
         openModal("modal-help");
+    }
+    function openGantt() {
+        $("gantt-title").textContent = project.name;
+        const modal = $("modal-gantt");
+        modal.classList.add("open");
+        requestAnimationFrame(() => renderGantt());
+    }
+    function renderGantt() {
+        const canvas = $("gantt-canvas");
+        const body = $("gantt-body");
+        const availableW = Math.max(600, body.clientWidth - 20);
+        const size = PC.computeGanttSize(project, availableW);
+        const dpr = window.devicePixelRatio || 1;
+        canvas.style.width = size.w + "px";
+        canvas.style.height = size.h + "px";
+        canvas.width = Math.round(size.w * dpr);
+        canvas.height = Math.round(size.h * dpr);
+        const c = canvas.getContext("2d");
+        if (!c)
+            return;
+        c.setTransform(dpr, 0, 0, dpr, 0, 0);
+        PC.drawGantt(c, project, size.w, size.h);
     }
     function openMemo() {
         const body = $("memo-body");
@@ -639,6 +1014,10 @@ var PC;
             openMemo();
             return;
         }
+        if (e.key === "g" || e.key === "G") {
+            openGantt();
+            return;
+        }
         if (e.key === "0") {
             const s = cssSize();
             PC.fitView(project, vs, s.w, s.h);
@@ -706,6 +1085,10 @@ var PC;
             PC.fitView(project, vs, s.w, s.h);
             render();
         });
+        $("btn-export-png").addEventListener("click", () => PC.exportPNG(project));
+        $("btn-export-csv").addEventListener("click", () => PC.exportCSV(project));
+        $("btn-gantt").addEventListener("click", openGantt);
+        $("gantt-export-png").addEventListener("click", () => PC.exportGanttPNG(project));
         $("btn-reset").addEventListener("click", () => {
             if (confirm("현재 프로젝트를 버리고 한글 예시 프로젝트를 불러옵니다. 계속하시겠습니까?")) {
                 project = PC.sampleProject();

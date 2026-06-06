@@ -72,6 +72,29 @@ namespace PC {
     openModal("modal-help");
   }
 
+  function openGantt(): void {
+    ($("gantt-title") as HTMLElement).textContent = project.name;
+    const modal = $("modal-gantt");
+    modal.classList.add("open");
+    requestAnimationFrame(() => renderGantt());
+  }
+
+  function renderGantt(): void {
+    const canvas = $("gantt-canvas") as HTMLCanvasElement;
+    const body = $("gantt-body");
+    const availableW = Math.max(600, body.clientWidth - 20);
+    const size = computeGanttSize(project, availableW);
+    const dpr = window.devicePixelRatio || 1;
+    canvas.style.width = size.w + "px";
+    canvas.style.height = size.h + "px";
+    canvas.width = Math.round(size.w * dpr);
+    canvas.height = Math.round(size.h * dpr);
+    const c = canvas.getContext("2d");
+    if (!c) return;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawGantt(c, project, size.w, size.h);
+  }
+
   function openMemo(): void {
     const body = $("memo-body");
     ($("memo-title") as HTMLElement).textContent = `프로젝트 메모 — ${project.name}`;
@@ -296,6 +319,10 @@ namespace PC {
       openMemo();
       return;
     }
+    if (e.key === "g" || e.key === "G") {
+      openGantt();
+      return;
+    }
     if (e.key === "0") {
       const s = cssSize();
       fitView(project, vs, s.w, s.h);
@@ -360,6 +387,10 @@ namespace PC {
       fitView(project, vs, s.w, s.h);
       render();
     });
+    $("btn-export-png").addEventListener("click", () => exportPNG(project));
+    $("btn-export-csv").addEventListener("click", () => exportCSV(project));
+    $("btn-gantt").addEventListener("click", openGantt);
+    $("gantt-export-png").addEventListener("click", () => exportGanttPNG(project));
     $("btn-reset").addEventListener("click", () => {
       if (confirm("현재 프로젝트를 버리고 한글 예시 프로젝트를 불러옵니다. 계속하시겠습니까?")) {
         project = sampleProject();

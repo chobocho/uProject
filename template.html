@@ -67,6 +67,12 @@
     background: linear-gradient(180deg, #BBBBBB, #AAAAAA);
     box-shadow: inset 0 1px 2px rgba(0,0,0,0.25);
   }
+  #toolbar button .ico {
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+    font-size: 13px;
+    margin-right: 2px;
+    vertical-align: -1px;
+  }
   #toolbar .spacer { flex: 1; }
   #toolbar .status {
     font-size: 11px; color: #333;
@@ -164,6 +170,20 @@
     font-weight: bold;
   }
   .dialog footer button.primary:hover { background: linear-gradient(180deg, #6BB0F8, #3A80D2); }
+  .dialog.wide {
+    max-width: 95vw;
+    width: 95vw;
+  }
+  #gantt-body {
+    padding: 0;
+    overflow: auto;
+    background: #FFFFFF;
+    max-height: calc(85vh - 90px);
+  }
+  #gantt-canvas {
+    display: block;
+    background: #FFFFFF;
+  }
   .deps-list {
     background: #FFF;
     border: 1px solid #888;
@@ -227,18 +247,21 @@
 <body>
   <div id="titlebar">ChoboProject &mdash; PERT Chart</div>
   <div id="toolbar">
-    <button id="btn-new" title="새 작업 추가 (N)">새 작업</button>
-    <button id="btn-edit" title="선택한 작업 편집 (Enter)">편집</button>
-    <button id="btn-delete" title="선택한 작업 삭제 (Delete)">삭제</button>
-    <button id="btn-connect" title="연결 모드 전환 — 작업에서 작업으로 드래그">연결</button>
-    <button id="btn-zoomout" title="축소">&minus;</button>
-    <button id="btn-zoomin" title="확대">+</button>
-    <button id="btn-fit" title="전체 보기 (0)">맞춤</button>
-    <button id="btn-memo" title="프로젝트 메모 (M)">메모</button>
-    <button id="btn-reset" title="한글 예시 프로젝트 불러오기">예시 불러오기</button>
+    <button id="btn-new" title="새 작업 추가 (N)"><span class="ico">➕</span> 새 작업</button>
+    <button id="btn-edit" title="선택한 작업 편집 (Enter)"><span class="ico">✏️</span> 편집</button>
+    <button id="btn-delete" title="선택한 작업 삭제 (Delete)"><span class="ico">🗑️</span> 삭제</button>
+    <button id="btn-connect" title="연결 모드 전환 — 작업에서 작업으로 드래그"><span class="ico">🔗</span> 연결</button>
+    <button id="btn-zoomout" title="축소"><span class="ico">🔍</span>−</button>
+    <button id="btn-zoomin" title="확대"><span class="ico">🔍</span>+</button>
+    <button id="btn-fit" title="전체 보기 (0)"><span class="ico">🖼️</span> 맞춤</button>
+    <button id="btn-memo" title="프로젝트 메모 (M)"><span class="ico">📝</span> 메모</button>
+    <button id="btn-gantt" title="간트 차트 (G)"><span class="ico">📅</span> 간트</button>
+    <button id="btn-export-png" title="PNG 이미지로 저장"><span class="ico">🖼️</span> PNG</button>
+    <button id="btn-export-csv" title="CSV로 저장 (Excel 호환)"><span class="ico">📊</span> CSV</button>
+    <button id="btn-reset" title="한글 예시 프로젝트 불러오기"><span class="ico">📂</span> 예시</button>
     <span class="spacer"></span>
     <span class="status" id="status"></span>
-    <button id="btn-help" title="도움말 (F1)">? 도움말</button>
+    <button id="btn-help" title="도움말 (F1)"><span class="ico">❓</span> 도움말</button>
   </div>
   <div id="stage">
     <canvas id="canvas"></canvas>
@@ -257,6 +280,19 @@
       <header id="memo-title">프로젝트 메모</header>
       <div class="body help-content" id="memo-body"></div>
       <footer><button class="primary" onclick="document.getElementById('modal-memo').classList.remove('open')">확인</button></footer>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-gantt">
+    <div class="dialog wide">
+      <header>간트 차트 — <span id="gantt-title"></span></header>
+      <div class="body" id="gantt-body">
+        <canvas id="gantt-canvas"></canvas>
+      </div>
+      <footer>
+        <button id="gantt-export-png"><span class="ico" style="font-family:'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif;">🖼️</span> PNG 저장</button>
+        <button class="primary" onclick="document.getElementById('modal-gantt').classList.remove('open')">확인</button>
+      </footer>
     </div>
   </div>
 
