@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>ChoboProject — PERT Chart</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    height: 100%; width: 100%;
+    overflow: hidden;
+    font-family: "Lucida Grande", "Geneva", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    background: #C0C0C0;
+    color: #000;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  #titlebar {
+    background: linear-gradient(180deg, #F4F4F4, #C8C8C8);
+    border-bottom: 1px solid #555;
+    color: #000;
+    font-size: 12px;
+    font-weight: bold;
+    text-align: center;
+    padding: 4px 8px;
+    line-height: 16px;
+    height: 24px;
+    position: relative;
+  }
+  #titlebar::before {
+    content: "";
+    display: inline-block;
+    width: 12px; height: 12px;
+    background: #FF5F57;
+    border: 1px solid #B33; border-radius: 50%;
+    position: absolute; left: 8px; top: 6px;
+  }
+  #titlebar::after {
+    content: "";
+    display: inline-block;
+    width: 12px; height: 12px;
+    background: #FEBC2E;
+    border: 1px solid #A8761A; border-radius: 50%;
+    position: absolute; left: 26px; top: 6px;
+  }
+  #toolbar {
+    background: #E8E8E8;
+    border-bottom: 1px solid #888;
+    padding: 6px 8px;
+    display: flex; gap: 4px; align-items: center; flex-wrap: wrap;
+    min-height: 36px;
+  }
+  #toolbar button {
+    background: linear-gradient(180deg, #FFFFFF, #DDDDDD);
+    border: 1px solid #888;
+    border-radius: 4px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    color: #000;
+  }
+  #toolbar button:hover { background: linear-gradient(180deg, #FFFFFF, #CCCCCC); }
+  #toolbar button:active,
+  #toolbar button.active {
+    background: linear-gradient(180deg, #BBBBBB, #AAAAAA);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.25);
+  }
+  #toolbar .spacer { flex: 1; }
+  #toolbar .status {
+    font-size: 11px; color: #333;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 50%;
+  }
+  #stage {
+    position: absolute;
+    left: 0; right: 0; top: 60px; bottom: 0;
+  }
+  #canvas {
+    display: block;
+    width: 100%; height: 100%;
+    background: #FFFFFF;
+    cursor: default;
+  }
+  .modal {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.45);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+  .modal.open { display: flex; }
+  .dialog {
+    background: #ECECEC;
+    border: 1px solid #444;
+    border-radius: 8px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+    min-width: 360px;
+    max-width: 760px;
+    width: 90%;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .dialog header {
+    background: linear-gradient(180deg, #F4F4F4, #C8C8C8);
+    border-bottom: 1px solid #888;
+    padding: 6px 12px;
+    font-weight: bold;
+    text-align: center;
+    font-size: 13px;
+  }
+  .dialog .body {
+    padding: 16px;
+    font-size: 13px;
+    line-height: 1.55;
+    overflow: auto;
+    background: #FFFFFF;
+  }
+  .dialog .body label {
+    display: block;
+    margin: 10px 0 4px;
+    font-weight: bold;
+    font-size: 12px;
+    color: #333;
+  }
+  .dialog .body input[type="text"],
+  .dialog .body input[type="number"],
+  .dialog .body input {
+    width: 100%;
+    padding: 5px 7px;
+    font-size: 13px;
+    font-family: inherit;
+    border: 1px solid #888;
+    border-radius: 3px;
+    background: #FFF;
+    color: #000;
+  }
+  .dialog .body input:disabled { background: #EEE; color: #555; }
+  .dialog footer {
+    padding: 8px 12px;
+    text-align: right;
+    border-top: 1px solid #BBB;
+    background: #ECECEC;
+  }
+  .dialog footer button {
+    background: linear-gradient(180deg, #FFFFFF, #DDDDDD);
+    border: 1px solid #888;
+    border-radius: 4px;
+    padding: 5px 18px;
+    margin-left: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: inherit;
+    color: #000;
+  }
+  .dialog footer button.primary {
+    background: linear-gradient(180deg, #5BA0E8, #2A70C2);
+    color: #FFF;
+    border-color: #1A5099;
+    font-weight: bold;
+  }
+  .dialog footer button.primary:hover { background: linear-gradient(180deg, #6BB0F8, #3A80D2); }
+  .deps-list {
+    background: #FFF;
+    border: 1px solid #888;
+    border-radius: 3px;
+    padding: 6px;
+    height: 120px;
+    overflow: auto;
+    font-size: 12px;
+  }
+  .deps-list label {
+    display: block !important;
+    margin: 2px 0 !important;
+    font-weight: normal !important;
+    color: #000 !important;
+    font-size: 12px !important;
+  }
+  .help-content h1 { font-size: 18px; margin: 0 0 8px; }
+  .help-content h2 {
+    font-size: 14px;
+    margin: 18px 0 6px;
+    color: #222;
+    border-bottom: 1px solid #BBB;
+    padding-bottom: 3px;
+  }
+  .help-content p, .help-content ul, .help-content ol { margin: 6px 0; }
+  .help-content code {
+    background: #E8E8E8;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+  }
+  .help-content kbd {
+    background: #FFF;
+    border: 1px solid #888;
+    border-bottom-width: 2px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-family: Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+  }
+  .help-content table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 8px 0;
+    font-size: 12px;
+  }
+  .help-content th, .help-content td {
+    border: 1px solid #BBB;
+    padding: 4px 8px;
+    text-align: left;
+  }
+  .help-content th {
+    background: #E8E8E8;
+    font-weight: bold;
+  }
+  .help-content tr.crit td { background: #FFF4F2; }
+  .help-content tr.crit td:first-child { color: #CC0000; font-weight: bold; }
+</style>
+</head>
+<body>
+  <div id="titlebar">ChoboProject &mdash; PERT Chart</div>
+  <div id="toolbar">
+    <button id="btn-new" title="새 작업 추가 (N)">새 작업</button>
+    <button id="btn-edit" title="선택한 작업 편집 (Enter)">편집</button>
+    <button id="btn-delete" title="선택한 작업 삭제 (Delete)">삭제</button>
+    <button id="btn-connect" title="연결 모드 전환 — 작업에서 작업으로 드래그">연결</button>
+    <button id="btn-zoomout" title="축소">&minus;</button>
+    <button id="btn-zoomin" title="확대">+</button>
+    <button id="btn-fit" title="전체 보기 (0)">맞춤</button>
+    <button id="btn-memo" title="프로젝트 메모 (M)">메모</button>
+    <button id="btn-reset" title="한글 예시 프로젝트 불러오기">예시 불러오기</button>
+    <span class="spacer"></span>
+    <span class="status" id="status"></span>
+    <button id="btn-help" title="도움말 (F1)">? 도움말</button>
+  </div>
+  <div id="stage">
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <div class="modal" id="modal-help">
+    <div class="dialog">
+      <header>PERT 차트 도움말</header>
+      <div class="body help-content" id="help-body"></div>
+      <footer><button class="primary" onclick="document.getElementById('modal-help').classList.remove('open')">확인</button></footer>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-memo">
+    <div class="dialog">
+      <header id="memo-title">프로젝트 메모</header>
+      <div class="body help-content" id="memo-body"></div>
+      <footer><button class="primary" onclick="document.getElementById('modal-memo').classList.remove('open')">확인</button></footer>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-edit">
+    <div class="dialog">
+      <header id="edit-title">작업 편집</header>
+      <div class="body">
+        <label>작업 ID</label>
+        <input id="ed-id" type="text" disabled>
+        <label>작업 이름</label>
+        <input id="ed-name" type="text" placeholder="예: 요구사항 분석">
+        <label>기간 (일)</label>
+        <input id="ed-duration" type="number" min="0" step="1">
+        <label>선행 작업 (의존성)</label>
+        <div class="deps-list" id="ed-deps"></div>
+      </div>
+      <footer>
+        <button onclick="document.getElementById('modal-edit').classList.remove('open')">취소</button>
+        <button class="primary" id="ed-save">저장</button>
+      </footer>
+    </div>
+  </div>
+
+<script>
+__APP_JS__
+</script>
+</body>
+</html>

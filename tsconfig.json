@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "es2019",
+    "module": "none",
+    "outFile": "build/app.js",
+    "rootDir": "src",
+    "ignoreDeprecations": "6.0",
+    "strict": true,
+    "noImplicitAny": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    "removeComments": true,
+    "lib": ["es2019", "dom"]
+  },
+  "include": ["src/**/*.ts"]
+}

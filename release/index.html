@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>ChoboProject — PERT Chart</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    height: 100%; width: 100%;
+    overflow: hidden;
+    font-family: "Lucida Grande", "Geneva", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    background: #C0C0C0;
+    color: #000;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  #titlebar {
+    background: linear-gradient(180deg, #F4F4F4, #C8C8C8);
+    border-bottom: 1px solid #555;
+    color: #000;
+    font-size: 12px;
+    font-weight: bold;
+    text-align: center;
+    padding: 4px 8px;
+    line-height: 16px;
+    height: 24px;
+    position: relative;
+  }
+  #titlebar::before {
+    content: "";
+    display: inline-block;
+    width: 12px; height: 12px;
+    background: #FF5F57;
+    border: 1px solid #B33; border-radius: 50%;
+    position: absolute; left: 8px; top: 6px;
+  }
+  #titlebar::after {
+    content: "";
+    display: inline-block;
+    width: 12px; height: 12px;
+    background: #FEBC2E;
+    border: 1px solid #A8761A; border-radius: 50%;
+    position: absolute; left: 26px; top: 6px;
+  }
+  #toolbar {
+    background: #E8E8E8;
+    border-bottom: 1px solid #888;
+    padding: 6px 8px;
+    display: flex; gap: 4px; align-items: center; flex-wrap: wrap;
+    min-height: 36px;
+  }
+  #toolbar button {
+    background: linear-gradient(180deg, #FFFFFF, #DDDDDD);
+    border: 1px solid #888;
+    border-radius: 4px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    color: #000;
+  }
+  #toolbar button:hover { background: linear-gradient(180deg, #FFFFFF, #CCCCCC); }
+  #toolbar button:active,
+  #toolbar button.active {
+    background: linear-gradient(180deg, #BBBBBB, #AAAAAA);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.25);
+  }
+  #toolbar .spacer { flex: 1; }
+  #toolbar .status {
+    font-size: 11px; color: #333;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 50%;
+  }
+  #stage {
+    position: absolute;
+    left: 0; right: 0; top: 60px; bottom: 0;
+  }
+  #canvas {
+    display: block;
+    width: 100%; height: 100%;
+    background: #FFFFFF;
+    cursor: default;
+  }
+  .modal {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.45);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+  .modal.open { display: flex; }
+  .dialog {
+    background: #ECECEC;
+    border: 1px solid #444;
+    border-radius: 8px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+    min-width: 360px;
+    max-width: 760px;
+    width: 90%;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .dialog header {
+    background: linear-gradient(180deg, #F4F4F4, #C8C8C8);
+    border-bottom: 1px solid #888;
+    padding: 6px 12px;
+    font-weight: bold;
+    text-align: center;
+    font-size: 13px;
+  }
+  .dialog .body {
+    padding: 16px;
+    font-size: 13px;
+    line-height: 1.55;
+    overflow: auto;
+    background: #FFFFFF;
+  }
+  .dialog .body label {
+    display: block;
+    margin: 10px 0 4px;
+    font-weight: bold;
+    font-size: 12px;
+    color: #333;
+  }
+  .dialog .body input[type="text"],
+  .dialog .body input[type="number"],
+  .dialog .body input {
+    width: 100%;
+    padding: 5px 7px;
+    font-size: 13px;
+    font-family: inherit;
+    border: 1px solid #888;
+    border-radius: 3px;
+    background: #FFF;
+    color: #000;
+  }
+  .dialog .body input:disabled { background: #EEE; color: #555; }
+  .dialog footer {
+    padding: 8px 12px;
+    text-align: right;
+    border-top: 1px solid #BBB;
+    background: #ECECEC;
+  }
+  .dialog footer button {
+    background: linear-gradient(180deg, #FFFFFF, #DDDDDD);
+    border: 1px solid #888;
+    border-radius: 4px;
+    padding: 5px 18px;
+    margin-left: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: inherit;
+    color: #000;
+  }
+  .dialog footer button.primary {
+    background: linear-gradient(180deg, #5BA0E8, #2A70C2);
+    color: #FFF;
+    border-color: #1A5099;
+    font-weight: bold;
+  }
+  .dialog footer button.primary:hover { background: linear-gradient(180deg, #6BB0F8, #3A80D2); }
+  .deps-list {
+    background: #FFF;
+    border: 1px solid #888;
+    border-radius: 3px;
+    padding: 6px;
+    height: 120px;
+    overflow: auto;
+    font-size: 12px;
+  }
+  .deps-list label {
+    display: block !important;
+    margin: 2px 0 !important;
+    font-weight: normal !important;
+    color: #000 !important;
+    font-size: 12px !important;
+  }
+  .help-content h1 { font-size: 18px; margin: 0 0 8px; }
+  .help-content h2 {
+    font-size: 14px;
+    margin: 18px 0 6px;
+    color: #222;
+    border-bottom: 1px solid #BBB;
+    padding-bottom: 3px;
+  }
+  .help-content p, .help-content ul, .help-content ol { margin: 6px 0; }
+  .help-content code {
+    background: #E8E8E8;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+  }
+  .help-content kbd {
+    background: #FFF;
+    border: 1px solid #888;
+    border-bottom-width: 2px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-family: Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+  }
+  .help-content table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 8px 0;
+    font-size: 12px;
+  }
+  .help-content th, .help-content td {
+    border: 1px solid #BBB;
+    padding: 4px 8px;
+    text-align: left;
+  }
+  .help-content th {
+    background: #E8E8E8;
+    font-weight: bold;
+  }
+  .help-content tr.crit td { background: #FFF4F2; }
+  .help-content tr.crit td:first-child { color: #CC0000; font-weight: bold; }
+</style>
+</head>
+<body>
+  <div id="titlebar">ChoboProject &mdash; PERT Chart</div>
+  <div id="toolbar">
+    <button id="btn-new" title="새 작업 추가 (N)">새 작업</button>
+    <button id="btn-edit" title="선택한 작업 편집 (Enter)">편집</button>
+    <button id="btn-delete" title="선택한 작업 삭제 (Delete)">삭제</button>
+    <button id="btn-connect" title="연결 모드 전환 — 작업에서 작업으로 드래그">연결</button>
+    <button id="btn-zoomout" title="축소">&minus;</button>
+    <button id="btn-zoomin" title="확대">+</button>
+    <button id="btn-fit" title="전체 보기 (0)">맞춤</button>
+    <button id="btn-memo" title="프로젝트 메모 (M)">메모</button>
+    <button id="btn-reset" title="한글 예시 프로젝트 불러오기">예시 불러오기</button>
+    <span class="spacer"></span>
+    <span class="status" id="status"></span>
+    <button id="btn-help" title="도움말 (F1)">? 도움말</button>
+  </div>
+  <div id="stage">
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <div class="modal" id="modal-help">
+    <div class="dialog">
+      <header>PERT 차트 도움말</header>
+      <div class="body help-content" id="help-body"></div>
+      <footer><button class="primary" onclick="document.getElementById('modal-help').classList.remove('open')">확인</button></footer>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-memo">
+    <div class="dialog">
+      <header id="memo-title">프로젝트 메모</header>
+      <div class="body help-content" id="memo-body"></div>
+      <footer><button class="primary" onclick="document.getElementById('modal-memo').classList.remove('open')">확인</button></footer>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-edit">
+    <div class="dialog">
+      <header id="edit-title">작업 편집</header>
+      <div class="body">
+        <label>작업 ID</label>
+        <input id="ed-id" type="text" disabled>
+        <label>작업 이름</label>
+        <input id="ed-name" type="text" placeholder="예: 요구사항 분석">
+        <label>기간 (일)</label>
+        <input id="ed-duration" type="number" min="0" step="1">
+        <label>선행 작업 (의존성)</label>
+        <div class="deps-list" id="ed-deps"></div>
+      </div>
+      <footer>
+        <button onclick="document.getElementById('modal-edit').classList.remove('open')">취소</button>
+        <button class="primary" id="ed-save">저장</button>
+      </footer>
+    </div>
+  </div>
+
+<script>
+"use strict";
+var PC;
+(function (PC) {
+    PC.HELP_HTML = `
+<h1>PERT 차트 사용 안내</h1>
+<p>PERT (Program Evaluation and Review Technique) 차트는 프로젝트의 각 작업을 노드(상자)로 표현하고, 작업 간의 선후 관계를 화살표로 연결하여 일정과 임계 경로(Critical Path)를 시각화하는 도구입니다.</p>
+
+<h2>화면 구성</h2>
+<p>각 작업 상자는 다음 정보를 표시합니다.</p>
+<ul>
+  <li><b>제목 바</b>: 작업 이름과 작업 ID</li>
+  <li><b>기간 (Duration)</b>: 작업을 완료하는 데 필요한 일수</li>
+  <li><b>ES</b> (Earliest Start) — 가장 빠른 시작일</li>
+  <li><b>EF</b> (Earliest Finish) — 가장 빠른 종료일</li>
+  <li><b>LS</b> (Latest Start) — 가장 늦은 시작일</li>
+  <li><b>LF</b> (Latest Finish) — 가장 늦은 종료일</li>
+  <li><b>여유 (Slack/Float)</b> — 프로젝트 종료를 지연시키지 않고 작업을 연기할 수 있는 일수</li>
+</ul>
+<p>여유가 <code>0</code>인 작업은 <b>임계 경로(Critical Path)</b>에 속하며, 굵은 빨간 테두리와 화살표로 표시됩니다. 이 작업이 늦어지면 전체 일정이 늦어집니다.</p>
+
+<h2>기본 조작</h2>
+<ul>
+  <li><b>작업 추가</b> — 빈 영역을 더블클릭하거나 툴바의 <kbd>새 작업</kbd> 버튼</li>
+  <li><b>작업 편집</b> — 상자를 더블클릭, 또는 선택 후 <kbd>편집</kbd></li>
+  <li><b>작업 이동</b> — 상자를 끌어서 놓기 (10px 격자에 정렬)</li>
+  <li><b>작업 선택</b> — 상자를 클릭</li>
+  <li><b>작업 삭제</b> — 선택 후 <kbd>Delete</kbd> / <kbd>Backspace</kbd> 또는 툴바의 <kbd>삭제</kbd> 버튼</li>
+  <li><b>의존성 연결</b> — <kbd>Alt</kbd>(또는 ⌘) 키를 누른 채 선행 작업에서 후행 작업으로 드래그. 또는 툴바의 <kbd>연결</kbd> 버튼을 눌러 연결 모드를 켠 뒤 드래그</li>
+  <li><b>의존성 해제</b> — 후행 작업을 편집하여 선행 작업 목록에서 체크 해제</li>
+  <li><b>화면 이동(Pan)</b> — 빈 공간 드래그 또는 <kbd>Shift</kbd>+드래그</li>
+  <li><b>확대/축소</b> — 휠 스크롤, 또는 툴바의 <kbd>+</kbd> / <kbd>−</kbd> 버튼. <kbd>맞춤</kbd>으로 전체 보기</li>
+</ul>
+
+<h2>키보드 단축키</h2>
+<ul>
+  <li><kbd>F1</kbd> 또는 <kbd>?</kbd> — 도움말 열기</li>
+  <li><kbd>N</kbd> — 새 작업 추가</li>
+  <li><kbd>M</kbd> — 프로젝트 메모 열기 (예시에는 CPM 계산 과정이 들어 있습니다)</li>
+  <li><kbd>Enter</kbd> — 선택한 작업 편집</li>
+  <li><kbd>Delete</kbd> / <kbd>Backspace</kbd> — 선택한 작업 삭제</li>
+  <li><kbd>Esc</kbd> — 선택/연결 모드 해제, 대화 상자 닫기</li>
+  <li><kbd>0</kbd> — 화면 맞춤</li>
+  <li>마우스 휠 — 확대/축소</li>
+</ul>
+
+<h2>임계 경로 계산 방식</h2>
+<p>이 도구는 CPM(Critical Path Method) 알고리즘을 사용합니다.</p>
+<ol>
+  <li><b>전진 계산 (Forward Pass)</b>: 시작 작업의 ES=0에서 출발하여 각 작업의 ES, EF를 계산합니다. <code>ES = max(선행작업의 EF)</code>, <code>EF = ES + 기간</code></li>
+  <li><b>후진 계산 (Backward Pass)</b>: 종료 작업의 LF=프로젝트 종료일에서 거꾸로 LS, LF를 계산합니다. <code>LF = min(후행작업의 LS)</code>, <code>LS = LF − 기간</code></li>
+  <li><b>여유 시간</b>: <code>Slack = LS − ES = LF − EF</code></li>
+  <li><b>임계 경로</b>: Slack=0인 작업들의 연속된 경로</li>
+</ol>
+
+<h2>팁</h2>
+<ul>
+  <li>변경 사항은 자동으로 브라우저의 LocalStorage에 저장됩니다.</li>
+  <li><kbd>예시 불러오기</kbd> 버튼으로 언제든 한글 예시 프로젝트로 초기화할 수 있습니다.</li>
+  <li>순환 의존성(A→B→A)은 자동으로 거부됩니다.</li>
+</ul>
+`;
+})(PC || (PC = {}));
+var PC;
+(function (PC) {
+    let project;
+    const vs = {
+        selectedId: null,
+        connectingFrom: null,
+        connectingTo: null,
+        panX: 0,
+        panY: 0,
+        zoom: 1
+    };
+    let canvas;
+    let ctx;
+    let statusEl;
+    let connectMode = false;
+    let drag = "none";
+    let dragTask = null;
+    let dragOffset = { x: 0, y: 0 };
+    let panStart = { x: 0, y: 0 };
+    function $(id) {
+        const el = document.getElementById(id);
+        if (!el)
+            throw new Error("missing #" + id);
+        return el;
+    }
+    function cssSize() {
+        const r = canvas.getBoundingClientRect();
+        return { w: r.width, h: r.height };
+    }
+    function render() {
+        const dpr = window.devicePixelRatio || 1;
+        const { w, h } = cssSize();
+        const pw = Math.max(1, Math.round(w * dpr));
+        const ph = Math.max(1, Math.round(h * dpr));
+        if (canvas.width !== pw || canvas.height !== ph) {
+            canvas.width = pw;
+            canvas.height = ph;
+        }
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        PC.draw(ctx, project, vs, w, h);
+        updateStatus();
+    }
+    function updateStatus() {
+        const total = PC.projectDuration(project);
+        const endDate = PC.addDays(project.startDate, total);
+        const sel = vs.selectedId ? project.tasks.find(t => t.id === vs.selectedId) : null;
+        let s = `프로젝트: ${project.name}  ·  시작 ${project.startDate}  ·  총 ${total}일  ·  종료 ${endDate}  ·  작업 ${project.tasks.length}개`;
+        if (sel)
+            s += `  ·  선택: ${sel.id} ${sel.name}`;
+        if (connectMode || vs.connectingFrom)
+            s += `  ·  [연결 모드]`;
+        statusEl.textContent = s;
+    }
+    function saveAndRender() {
+        PC.recalc(project);
+        PC.saveProject(project);
+        render();
+    }
+    function openModal(id) { $(id).classList.add("open"); }
+    function closeModal(id) { $(id).classList.remove("open"); }
+    function modalOpen() {
+        return document.querySelectorAll(".modal.open").length > 0;
+    }
+    function openHelp() {
+        $("help-body").innerHTML = PC.HELP_HTML;
+        openModal("modal-help");
+    }
+    function openMemo() {
+        const body = $("memo-body");
+        $("memo-title").textContent = `프로젝트 메모 — ${project.name}`;
+        if (project.memo && project.memo.trim().length > 0) {
+            body.innerHTML = project.memo;
+        }
+        else {
+            body.innerHTML =
+                '<p style="color:#666">이 프로젝트에는 저장된 메모가 없습니다. ' +
+                    '<kbd>예시 불러오기</kbd>를 누르면 CPM 계산 과정이 담긴 예시 메모를 확인할 수 있습니다.</p>';
+        }
+        openModal("modal-memo");
+    }
+    function openEditor(task) {
+        const isNew = task === null;
+        const t = task !== null && task !== void 0 ? task : {
+            id: PC.nextId(project),
+            name: "새 작업",
+            duration: 1,
+            x: (cssSize().w / 2 - vs.panX) / vs.zoom - PC.BOX_W / 2,
+            y: (cssSize().h / 2 - vs.panY) / vs.zoom - PC.BOX_H / 2,
+            deps: [],
+            es: 0, ef: 0, ls: 0, lf: 0, slack: 0, critical: false
+        };
+        $("edit-title").textContent = isNew ? "새 작업 추가" : "작업 편집";
+        $("ed-id").value = t.id;
+        $("ed-name").value = t.name;
+        $("ed-duration").value = String(t.duration);
+        const depsBox = $("ed-deps");
+        depsBox.innerHTML = "";
+        const others = project.tasks.filter(o => o.id !== t.id);
+        if (others.length === 0) {
+            depsBox.innerHTML = '<div style="color:#888">선행 작업으로 지정할 다른 작업이 없습니다.</div>';
+        }
+        else {
+            others.forEach(o => {
+                const lab = document.createElement("label");
+                const cb = document.createElement("input");
+                cb.type = "checkbox";
+                cb.value = o.id;
+                cb.checked = t.deps.includes(o.id);
+                if (!isNew && PC.wouldCreateCycle(project, o.id, t.id)) {
+                    cb.disabled = true;
+                }
+                lab.appendChild(cb);
+                lab.appendChild(document.createTextNode(" " + o.id + " — " + o.name));
+                depsBox.appendChild(lab);
+            });
+        }
+        const saveBtn = $("ed-save");
+        saveBtn.onclick = () => {
+            const newName = $("ed-name").value.trim() || t.name;
+            const newDur = Math.max(0, parseInt($("ed-duration").value, 10) || 0);
+            const newDeps = [];
+            depsBox.querySelectorAll("input[type=checkbox]").forEach(el => {
+                const c = el;
+                if (c.checked)
+                    newDeps.push(c.value);
+            });
+            t.name = newName;
+            t.duration = newDur;
+            t.deps = newDeps;
+            if (isNew)
+                project.tasks.push(t);
+            closeModal("modal-edit");
+            saveAndRender();
+        };
+        openModal("modal-edit");
+        setTimeout(() => $("ed-name").focus(), 50);
+    }
+    function deleteTask(id) {
+        project.tasks = project.tasks.filter(t => t.id !== id);
+        project.tasks.forEach(t => { t.deps = t.deps.filter(d => d !== id); });
+        if (vs.selectedId === id)
+            vs.selectedId = null;
+        saveAndRender();
+    }
+    function onMouseDown(e) {
+        if (modalOpen())
+            return;
+        const r = canvas.getBoundingClientRect();
+        const sx = e.clientX - r.left;
+        const sy = e.clientY - r.top;
+        const t = PC.hitTest(project, vs, sx, sy);
+        if (e.button === 1 || (e.shiftKey && !t)) {
+            drag = "pan";
+            panStart = { x: sx - vs.panX, y: sy - vs.panY };
+            return;
+        }
+        if (t) {
+            vs.selectedId = t.id;
+            if (connectMode || e.altKey || e.metaKey) {
+                drag = "connect";
+                vs.connectingFrom = t.id;
+                vs.connectingTo = { x: sx, y: sy };
+            }
+            else {
+                drag = "task";
+                dragTask = t;
+                const w = PC.screenToWorld(vs, sx, sy);
+                dragOffset = { x: w.x - t.x, y: w.y - t.y };
+            }
+        }
+        else {
+            vs.selectedId = null;
+            drag = "pan";
+            panStart = { x: sx - vs.panX, y: sy - vs.panY };
+        }
+        render();
+    }
+    function onMouseMove(e) {
+        if (drag === "none")
+            return;
+        const r = canvas.getBoundingClientRect();
+        const sx = e.clientX - r.left;
+        const sy = e.clientY - r.top;
+        if (drag === "task" && dragTask) {
+            const w = PC.screenToWorld(vs, sx, sy);
+            dragTask.x = Math.round((w.x - dragOffset.x) / 10) * 10;
+            dragTask.y = Math.round((w.y - dragOffset.y) / 10) * 10;
+            render();
+        }
+        else if (drag === "pan") {
+            vs.panX = sx - panStart.x;
+            vs.panY = sy - panStart.y;
+            render();
+        }
+        else if (drag === "connect") {
+            const w = PC.screenToWorld(vs, sx, sy);
+            vs.connectingTo = { x: w.x, y: w.y };
+            render();
+        }
+    }
+    function onMouseUp(e) {
+        if (drag === "connect" && vs.connectingFrom) {
+            const r = canvas.getBoundingClientRect();
+            const sx = e.clientX - r.left;
+            const sy = e.clientY - r.top;
+            const t = PC.hitTest(project, vs, sx, sy);
+            if (t && t.id !== vs.connectingFrom) {
+                if (!t.deps.includes(vs.connectingFrom)) {
+                    if (!PC.wouldCreateCycle(project, vs.connectingFrom, t.id)) {
+                        t.deps.push(vs.connectingFrom);
+                        saveAndRender();
+                    }
+                    else {
+                        alert("순환 의존성이 됩니다. 연결할 수 없습니다.");
+                    }
+                }
+            }
+            vs.connectingFrom = null;
+            vs.connectingTo = null;
+        }
+        if (drag === "task")
+            PC.saveProject(project);
+        drag = "none";
+        dragTask = null;
+        render();
+    }
+    function onDblClick(e) {
+        if (modalOpen())
+            return;
+        const r = canvas.getBoundingClientRect();
+        const sx = e.clientX - r.left;
+        const sy = e.clientY - r.top;
+        const t = PC.hitTest(project, vs, sx, sy);
+        if (t)
+            openEditor(t);
+        else
+            openEditor(null);
+    }
+    function onWheel(e) {
+        if (modalOpen())
+            return;
+        e.preventDefault();
+        const r = canvas.getBoundingClientRect();
+        const sx = e.clientX - r.left;
+        const sy = e.clientY - r.top;
+        const before = PC.screenToWorld(vs, sx, sy);
+        const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+        vs.zoom = Math.min(3, Math.max(0.25, vs.zoom * factor));
+        const after = PC.screenToWorld(vs, sx, sy);
+        vs.panX += (after.x - before.x) * vs.zoom;
+        vs.panY += (after.y - before.y) * vs.zoom;
+        render();
+    }
+    function onKey(e) {
+        if (e.key === "F1" || (e.key === "?" && !modalOpen())) {
+            e.preventDefault();
+            openHelp();
+            return;
+        }
+        if (e.key === "Escape") {
+            if (modalOpen()) {
+                document.querySelectorAll(".modal.open").forEach(m => m.classList.remove("open"));
+            }
+            else {
+                vs.selectedId = null;
+                vs.connectingFrom = null;
+                vs.connectingTo = null;
+                connectMode = false;
+            }
+            render();
+            return;
+        }
+        if (modalOpen())
+            return;
+        const target = e.target;
+        if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT"))
+            return;
+        if ((e.key === "Delete" || e.key === "Backspace") && vs.selectedId) {
+            e.preventDefault();
+            deleteTask(vs.selectedId);
+            return;
+        }
+        if (e.key === "Enter" && vs.selectedId) {
+            const t = project.tasks.find(x => x.id === vs.selectedId);
+            if (t)
+                openEditor(t);
+            return;
+        }
+        if (e.key === "n" || e.key === "N") {
+            openEditor(null);
+            return;
+        }
+        if (e.key === "m" || e.key === "M") {
+            openMemo();
+            return;
+        }
+        if (e.key === "0") {
+            const s = cssSize();
+            PC.fitView(project, vs, s.w, s.h);
+            render();
+            return;
+        }
+    }
+    function zoom(delta) {
+        const s = cssSize();
+        const cx = s.w / 2, cy = s.h / 2;
+        const before = PC.screenToWorld(vs, cx, cy);
+        vs.zoom = Math.min(3, Math.max(0.25, vs.zoom * delta));
+        const after = PC.screenToWorld(vs, cx, cy);
+        vs.panX += (after.x - before.x) * vs.zoom;
+        vs.panY += (after.y - before.y) * vs.zoom;
+        render();
+    }
+    function init() {
+        var _a;
+        canvas = document.getElementById("canvas");
+        const c = canvas.getContext("2d");
+        if (!c) {
+            alert("Canvas 2D를 사용할 수 없습니다.");
+            return;
+        }
+        ctx = c;
+        statusEl = $("status");
+        project = (_a = PC.loadProject()) !== null && _a !== void 0 ? _a : PC.sampleProject();
+        PC.recalc(project);
+        canvas.addEventListener("mousedown", onMouseDown);
+        window.addEventListener("mousemove", onMouseMove);
+        window.addEventListener("mouseup", onMouseUp);
+        canvas.addEventListener("dblclick", onDblClick);
+        canvas.addEventListener("wheel", onWheel, { passive: false });
+        window.addEventListener("keydown", onKey);
+        window.addEventListener("resize", render);
+        $("btn-help").addEventListener("click", openHelp);
+        $("btn-memo").addEventListener("click", openMemo);
+        $("btn-new").addEventListener("click", () => openEditor(null));
+        $("btn-edit").addEventListener("click", () => {
+            if (vs.selectedId) {
+                const t = project.tasks.find(x => x.id === vs.selectedId);
+                if (t)
+                    openEditor(t);
+            }
+            else {
+                alert("편집할 작업을 먼저 선택하세요.");
+            }
+        });
+        $("btn-delete").addEventListener("click", () => {
+            if (vs.selectedId)
+                deleteTask(vs.selectedId);
+            else
+                alert("삭제할 작업을 먼저 선택하세요.");
+        });
+        $("btn-connect").addEventListener("click", () => {
+            connectMode = !connectMode;
+            $("btn-connect").classList.toggle("active", connectMode);
+            render();
+        });
+        $("btn-zoomin").addEventListener("click", () => zoom(1.2));
+        $("btn-zoomout").addEventListener("click", () => zoom(1 / 1.2));
+        $("btn-fit").addEventListener("click", () => {
+            const s = cssSize();
+            PC.fitView(project, vs, s.w, s.h);
+            render();
+        });
+        $("btn-reset").addEventListener("click", () => {
+            if (confirm("현재 프로젝트를 버리고 한글 예시 프로젝트를 불러옵니다. 계속하시겠습니까?")) {
+                project = PC.sampleProject();
+                saveAndRender();
+                const s = cssSize();
+                PC.fitView(project, vs, s.w, s.h);
+                render();
+            }
+        });
+        document.querySelectorAll(".modal").forEach(m => {
+            m.addEventListener("click", e => {
+                if (e.target === m)
+                    m.classList.remove("open");
+            });
+        });
+        requestAnimationFrame(() => {
+            const s = cssSize();
+            PC.fitView(project, vs, s.w, s.h);
+            render();
+        });
+    }
+    PC.init = init;
+})(PC || (PC = {}));
+window.addEventListener("DOMContentLoaded", () => PC.init());
+var PC;
+(function (PC) {
+    function recalc(p) {
+        const tasks = p.tasks;
+        if (tasks.length === 0)
+            return;
+        const map = new Map();
+        tasks.forEach(t => map.set(t.id, t));
+        const indeg = new Map();
+        tasks.forEach(t => indeg.set(t.id, t.deps.filter(d => map.has(d)).length));
+        const order = [];
+        const queue = [];
+        tasks.forEach(t => { if (indeg.get(t.id) === 0)
+            queue.push(t); });
+        while (queue.length > 0) {
+            const t = queue.shift();
+            order.push(t);
+            tasks.forEach(s => {
+                if (s.deps.includes(t.id)) {
+                    indeg.set(s.id, indeg.get(s.id) - 1);
+                    if (indeg.get(s.id) === 0)
+                        queue.push(s);
+                }
+            });
+        }
+        if (order.length !== tasks.length) {
+            tasks.forEach(t => { if (!order.includes(t))
+                order.push(t); });
+        }
+        order.forEach(t => {
+            if (t.deps.length === 0) {
+                t.es = 0;
+            }
+            else {
+                let m = 0;
+                t.deps.forEach(d => {
+                    const dt = map.get(d);
+                    if (dt && dt.ef > m)
+                        m = dt.ef;
+                });
+                t.es = m;
+            }
+            t.ef = t.es + t.duration;
+        });
+        let projectEnd = 0;
+        tasks.forEach(t => { if (t.ef > projectEnd)
+            projectEnd = t.ef; });
+        for (let i = order.length - 1; i >= 0; i--) {
+            const t = order[i];
+            const successors = tasks.filter(s => s.deps.includes(t.id));
+            if (successors.length === 0) {
+                t.lf = projectEnd;
+            }
+            else {
+                let m = Infinity;
+                successors.forEach(s => { if (s.ls < m)
+                    m = s.ls; });
+                t.lf = m;
+            }
+            t.ls = t.lf - t.duration;
+            t.slack = t.ls - t.es;
+            t.critical = t.slack === 0;
+        }
+    }
+    PC.recalc = recalc;
+    function wouldCreateCycle(p, fromId, toId) {
+        if (fromId === toId)
+            return true;
+        const map = new Map();
+        p.tasks.forEach(t => map.set(t.id, t));
+        const seen = new Set();
+        const stack = [fromId];
+        while (stack.length > 0) {
+            const cur = stack.pop();
+            if (cur === toId)
+                return true;
+            if (seen.has(cur))
+                continue;
+            seen.add(cur);
+            const t = map.get(cur);
+            if (t)
+                t.deps.forEach(d => stack.push(d));
+        }
+        return false;
+    }
+    PC.wouldCreateCycle = wouldCreateCycle;
+    function nextId(p) {
+        const used = new Set(p.tasks.map(t => t.id));
+        const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        for (const c of letters)
+            if (!used.has(c))
+                return c;
+        for (let i = 1; i < 1000; i++) {
+            for (const c of letters) {
+                const id = c + i;
+                if (!used.has(id))
+                    return id;
+            }
+        }
+        return "T" + Date.now();
+    }
+    PC.nextId = nextId;
+    function projectDuration(p) {
+        let m = 0;
+        p.tasks.forEach(t => { if (t.ef > m)
+            m = t.ef; });
+        return m;
+    }
+    PC.projectDuration = projectDuration;
+    function addDays(start, days) {
+        const d = new Date(start);
+        d.setDate(d.getDate() + days);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const dd = String(d.getDate()).padStart(2, "0");
+        return `${y}-${m}-${dd}`;
+    }
+    PC.addDays = addDays;
+})(PC || (PC = {}));
+var PC;
+(function (PC) {
+    function sampleProject() {
+        const blank = (id, name, dur, x, y, deps) => ({
+            id, name, duration: dur, x, y, deps,
+            es: 0, ef: 0, ls: 0, lf: 0, slack: 0, critical: false
+        });
+        return {
+            name: "신제품 개발 프로젝트",
+            startDate: "2026-06-08",
+            tasks: [
+                blank("A", "요구사항 분석", 5, 60, 120, []),
+                blank("B", "시장 조사", 7, 60, 320, []),
+                blank("C", "제품 설계", 10, 320, 120, ["A"]),
+                blank("D", "프로토타입 제작", 8, 320, 320, ["B"]),
+                blank("E", "내부 테스트", 6, 580, 120, ["C", "D"]),
+                blank("F", "문서 작성", 4, 580, 320, ["C"]),
+                blank("G", "사용자 테스트", 5, 840, 220, ["E", "F"]),
+                blank("H", "출시 준비", 3, 1100, 220, ["G"])
+            ],
+            memo: SAMPLE_MEMO
+        };
+    }
+    PC.sampleProject = sampleProject;
+    const SAMPLE_MEMO = `
+<h1>예시 프로젝트의 CPM 계산 메모</h1>
+<p>이 예시는 8개의 작업으로 구성된 "신제품 개발 프로젝트"입니다. 모든 시점은 프로젝트 시작일(2026-06-08) <b>0일째</b> 기준 누적 일수입니다.</p>
+
+<h2>의존 관계 요약</h2>
+<ul>
+  <li>A(5일), B(7일): 선행 작업 없음</li>
+  <li>C(10일) ← A</li>
+  <li>D(8일) ← B</li>
+  <li>E(6일) ← C, D</li>
+  <li>F(4일) ← C</li>
+  <li>G(5일) ← E, F</li>
+  <li>H(3일) ← G</li>
+</ul>
+
+<h2>1단계 — 전진 계산 (Forward Pass)</h2>
+<p>공식: <code>ES = max(선행작업.EF)</code>, <code>EF = ES + 기간</code></p>
+<table>
+  <thead><tr><th>작업</th><th>의존</th><th>기간</th><th>ES 계산</th><th>EF 계산</th></tr></thead>
+  <tbody>
+    <tr><td>A</td><td>—</td><td>5</td><td>0</td><td>0+5 = <b>5</b></td></tr>
+    <tr><td>B</td><td>—</td><td>7</td><td>0</td><td>0+7 = <b>7</b></td></tr>
+    <tr><td>C</td><td>A</td><td>10</td><td>max(A.EF)=5</td><td>5+10 = <b>15</b></td></tr>
+    <tr><td>D</td><td>B</td><td>8</td><td>max(B.EF)=7</td><td>7+8 = <b>15</b></td></tr>
+    <tr><td>E</td><td>C,D</td><td>6</td><td>max(15,15)=15</td><td>15+6 = <b>21</b></td></tr>
+    <tr><td>F</td><td>C</td><td>4</td><td>max(C.EF)=15</td><td>15+4 = <b>19</b></td></tr>
+    <tr><td>G</td><td>E,F</td><td>5</td><td>max(21,19)=21</td><td>21+5 = <b>26</b></td></tr>
+    <tr><td>H</td><td>G</td><td>3</td><td>max(G.EF)=26</td><td>26+3 = <b>29</b></td></tr>
+  </tbody>
+</table>
+<p>→ <b>프로젝트 총 기간 = 29일</b> (가장 큰 EF). 종료일 2026-07-07.</p>
+
+<h2>2단계 — 후진 계산 (Backward Pass)</h2>
+<p>공식: <code>LF = min(후행작업.LS)</code>, 종료 작업은 <code>LF = 프로젝트 종료(29)</code>, <code>LS = LF − 기간</code></p>
+<table>
+  <thead><tr><th>작업</th><th>후행</th><th>LF 계산</th><th>LS 계산</th></tr></thead>
+  <tbody>
+    <tr><td>H</td><td>(종료)</td><td><b>29</b></td><td>29−3 = <b>26</b></td></tr>
+    <tr><td>G</td><td>H</td><td>H.LS = <b>26</b></td><td>26−5 = <b>21</b></td></tr>
+    <tr><td>F</td><td>G</td><td>G.LS = <b>21</b></td><td>21−4 = <b>17</b></td></tr>
+    <tr><td>E</td><td>G</td><td>G.LS = <b>21</b></td><td>21−6 = <b>15</b></td></tr>
+    <tr><td>D</td><td>E</td><td>E.LS = <b>15</b></td><td>15−8 = <b>7</b></td></tr>
+    <tr><td>C</td><td>E,F</td><td>min(15,17) = <b>15</b></td><td>15−10 = <b>5</b></td></tr>
+    <tr><td>B</td><td>D</td><td>D.LS = <b>7</b></td><td>7−7 = <b>0</b></td></tr>
+    <tr><td>A</td><td>C</td><td>C.LS = <b>5</b></td><td>5−5 = <b>0</b></td></tr>
+  </tbody>
+</table>
+
+<h2>3단계 — 여유 시간 (Slack) 및 임계 경로</h2>
+<p>공식: <code>Slack = LS − ES</code>. Slack=0이면 임계 경로.</p>
+<table>
+  <thead><tr><th>작업</th><th>ES</th><th>EF</th><th>LS</th><th>LF</th><th>여유</th><th>임계?</th></tr></thead>
+  <tbody>
+    <tr class="crit"><td>A</td><td>0</td><td>5</td><td>0</td><td>5</td><td>0</td><td>★</td></tr>
+    <tr><td>B</td><td>0</td><td>7</td><td>0</td><td>7</td><td>0</td><td>★</td></tr>
+    <tr class="crit"><td>C</td><td>5</td><td>15</td><td>5</td><td>15</td><td>0</td><td>★</td></tr>
+    <tr><td>D</td><td>7</td><td>15</td><td>7</td><td>15</td><td>0</td><td>★</td></tr>
+    <tr class="crit"><td>E</td><td>15</td><td>21</td><td>15</td><td>21</td><td>0</td><td>★</td></tr>
+    <tr><td>F</td><td>15</td><td>19</td><td>17</td><td>21</td><td><b>2</b></td><td>—</td></tr>
+    <tr class="crit"><td>G</td><td>21</td><td>26</td><td>21</td><td>26</td><td>0</td><td>★</td></tr>
+    <tr class="crit"><td>H</td><td>26</td><td>29</td><td>26</td><td>29</td><td>0</td><td>★</td></tr>
+  </tbody>
+</table>
+<p><b>임계 경로:</b> A → C → E → G → H (또는 B → D → E → G → H). 두 경로 모두 29일로 동일.</p>
+<p><b>F만 여유 2일</b>이 있어 일정 조정 가능. 즉 F는 15일째에 시작하지 않고 17일까지 미뤄도 전체 일정에 영향이 없습니다.</p>
+
+<h2>실무 활용 팁</h2>
+<ul>
+  <li>임계 경로 위의 작업이 하루 늦어지면 프로젝트도 하루 늦어집니다. 자원 배분 우선순위가 높습니다.</li>
+  <li>여유가 있는 작업(F)은 인력/예산을 임계 경로로 재배치할 수 있는 후보입니다.</li>
+  <li>이 예시는 두 개의 임계 경로(A-C와 B-D)가 같은 길이로 합류하는 형태로, 어느 한쪽이 단축되어도 다른 쪽이 임계가 되어 단축 효과가 제한적입니다 — 두 경로를 동시에 단축해야 일정이 줄어듭니다.</li>
+</ul>
+`;
+})(PC || (PC = {}));
+var PC;
+(function (PC) {
+    const KEY = "pertchart_v1";
+    function saveProject(p) {
+        try {
+            localStorage.setItem(KEY, JSON.stringify(p));
+        }
+        catch (_) {
+        }
+    }
+    PC.saveProject = saveProject;
+    function loadProject() {
+        try {
+            const s = localStorage.getItem(KEY);
+            if (!s)
+                return null;
+            const p = JSON.parse(s);
+            if (!p || !Array.isArray(p.tasks))
+                return null;
+            return p;
+        }
+        catch (_) {
+            return null;
+        }
+    }
+    PC.loadProject = loadProject;
+    function clearProject() {
+        try {
+            localStorage.removeItem(KEY);
+        }
+        catch (_) { }
+    }
+    PC.clearProject = clearProject;
+})(PC || (PC = {}));
+var PC;
+(function (PC) {
+    PC.BOX_W = 200;
+    PC.BOX_H = 110;
+})(PC || (PC = {}));
+var PC;
+(function (PC) {
+    function draw(ctx, p, vs, cssW, cssH) {
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0, 0, cssW, cssH);
+        ctx.save();
+        ctx.translate(vs.panX, vs.panY);
+        ctx.scale(vs.zoom, vs.zoom);
+        drawGrid(ctx, cssW, cssH, vs);
+        const map = new Map();
+        p.tasks.forEach(t => map.set(t.id, t));
+        p.tasks.forEach(t => {
+            t.deps.forEach(d => {
+                const from = map.get(d);
+                if (from)
+                    drawArrow(ctx, from, t, from.critical && t.critical);
+            });
+        });
+        if (vs.connectingFrom && vs.connectingTo) {
+            const from = map.get(vs.connectingFrom);
+            if (from) {
+                ctx.save();
+                ctx.strokeStyle = "#0066CC";
+                ctx.lineWidth = 2;
+                ctx.setLineDash([6, 4]);
+                ctx.beginPath();
+                ctx.moveTo(from.x + PC.BOX_W, from.y + PC.BOX_H / 2);
+                ctx.lineTo(vs.connectingTo.x, vs.connectingTo.y);
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+        p.tasks.forEach(t => drawBox(ctx, t, vs));
+        ctx.restore();
+    }
+    PC.draw = draw;
+    function drawGrid(ctx, cssW, cssH, vs) {
+        ctx.strokeStyle = "#EFEFEF";
+        ctx.lineWidth = 1 / vs.zoom;
+        const step = 20;
+        const x0 = -vs.panX / vs.zoom;
+        const y0 = -vs.panY / vs.zoom;
+        const x1 = x0 + cssW / vs.zoom;
+        const y1 = y0 + cssH / vs.zoom;
+        const sx = Math.floor(x0 / step) * step;
+        const sy = Math.floor(y0 / step) * step;
+        ctx.beginPath();
+        for (let x = sx; x < x1; x += step) {
+            ctx.moveTo(x, y0);
+            ctx.lineTo(x, y1);
+        }
+        for (let y = sy; y < y1; y += step) {
+            ctx.moveTo(x0, y);
+            ctx.lineTo(x1, y);
+        }
+        ctx.stroke();
+    }
+    function drawBox(ctx, t, vs) {
+        const x = t.x, y = t.y;
+        ctx.fillStyle = "rgba(0,0,0,0.25)";
+        ctx.fillRect(x + 3, y + 3, PC.BOX_W, PC.BOX_H);
+        ctx.fillStyle = t.critical ? "#FFF4F2" : "#FFFFFF";
+        ctx.fillRect(x, y, PC.BOX_W, PC.BOX_H);
+        ctx.strokeStyle = t.critical ? "#CC0000" : "#000000";
+        ctx.lineWidth = t.critical ? 2.5 : 1;
+        ctx.strokeRect(x, y, PC.BOX_W, PC.BOX_H);
+        ctx.fillStyle = t.critical ? "#CC0000" : "#000000";
+        ctx.fillRect(x, y, PC.BOX_W, 22);
+        ctx.fillStyle = "#FFFFFF";
+        ctx.font = 'bold 12px "Lucida Grande", "Geneva", "Apple SD Gothic Neo", sans-serif';
+        ctx.textBaseline = "middle";
+        ctx.textAlign = "left";
+        const name = clipText(ctx, t.name, PC.BOX_W - 38);
+        ctx.fillText(name, x + 8, y + 11);
+        ctx.textAlign = "right";
+        ctx.fillText(t.id, x + PC.BOX_W - 8, y + 11);
+        ctx.strokeStyle = "#888888";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, y + 44);
+        ctx.lineTo(x + PC.BOX_W, y + 44);
+        ctx.moveTo(x, y + 66);
+        ctx.lineTo(x + PC.BOX_W, y + 66);
+        ctx.moveTo(x, y + 88);
+        ctx.lineTo(x + PC.BOX_W, y + 88);
+        ctx.moveTo(x + PC.BOX_W / 2, y + 44);
+        ctx.lineTo(x + PC.BOX_W / 2, y + 88);
+        ctx.stroke();
+        ctx.fillStyle = "#000000";
+        ctx.font = '11px "Geneva", "Apple SD Gothic Neo", sans-serif';
+        ctx.textBaseline = "middle";
+        ctx.textAlign = "left";
+        ctx.fillText(`기간: ${t.duration}일`, x + 8, y + 33);
+        ctx.fillText(`ES: ${t.es}`, x + 8, y + 55);
+        ctx.fillText(`EF: ${t.ef}`, x + PC.BOX_W / 2 + 8, y + 55);
+        ctx.fillText(`LS: ${t.ls}`, x + 8, y + 77);
+        ctx.fillText(`LF: ${t.lf}`, x + PC.BOX_W / 2 + 8, y + 77);
+        ctx.fillText(`여유: ${t.slack}일${t.critical ? "  ★ 임계" : ""}`, x + 8, y + 99);
+        if (vs.selectedId === t.id) {
+            ctx.strokeStyle = "#0066CC";
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 3]);
+            ctx.strokeRect(x - 4, y - 4, PC.BOX_W + 8, PC.BOX_H + 8);
+            ctx.setLineDash([]);
+        }
+    }
+    function clipText(ctx, s, maxW) {
+        if (ctx.measureText(s).width <= maxW)
+            return s;
+        let lo = 0, hi = s.length;
+        while (lo < hi) {
+            const mid = (lo + hi + 1) >> 1;
+            if (ctx.measureText(s.slice(0, mid) + "…").width <= maxW)
+                lo = mid;
+            else
+                hi = mid - 1;
+        }
+        return s.slice(0, lo) + "…";
+    }
+    function drawArrow(ctx, from, to, critical) {
+        const x1 = from.x + PC.BOX_W;
+        const y1 = from.y + PC.BOX_H / 2;
+        const x2 = to.x;
+        const y2 = to.y + PC.BOX_H / 2;
+        ctx.strokeStyle = critical ? "#CC0000" : "#000000";
+        ctx.fillStyle = critical ? "#CC0000" : "#000000";
+        ctx.lineWidth = critical ? 2.5 : 1.5;
+        const dx = Math.max(40, (x2 - x1) / 2);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.bezierCurveTo(x1 + dx, y1, x2 - dx, y2, x2, y2);
+        ctx.stroke();
+        const ah = 10;
+        const ang = Math.atan2(y2 - y1, dx);
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - ah * Math.cos(ang - Math.PI / 7), y2 - ah * Math.sin(ang - Math.PI / 7));
+        ctx.lineTo(x2 - ah * Math.cos(ang + Math.PI / 7), y2 - ah * Math.sin(ang + Math.PI / 7));
+        ctx.closePath();
+        ctx.fill();
+    }
+    function hitTest(p, vs, sx, sy) {
+        const w = screenToWorld(vs, sx, sy);
+        for (let i = p.tasks.length - 1; i >= 0; i--) {
+            const t = p.tasks[i];
+            if (w.x >= t.x && w.x <= t.x + PC.BOX_W && w.y >= t.y && w.y <= t.y + PC.BOX_H)
+                return t;
+        }
+        return null;
+    }
+    PC.hitTest = hitTest;
+    function screenToWorld(vs, sx, sy) {
+        return { x: (sx - vs.panX) / vs.zoom, y: (sy - vs.panY) / vs.zoom };
+    }
+    PC.screenToWorld = screenToWorld;
+    function fitView(p, vs, cssW, cssH) {
+        if (p.tasks.length === 0) {
+            vs.panX = 0;
+            vs.panY = 0;
+            vs.zoom = 1;
+            return;
+        }
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        p.tasks.forEach(t => {
+            if (t.x < minX)
+                minX = t.x;
+            if (t.y < minY)
+                minY = t.y;
+            if (t.x + PC.BOX_W > maxX)
+                maxX = t.x + PC.BOX_W;
+            if (t.y + PC.BOX_H > maxY)
+                maxY = t.y + PC.BOX_H;
+        });
+        const pad = 40;
+        const w = (maxX - minX) + pad * 2;
+        const h = (maxY - minY) + pad * 2;
+        const z = Math.min(cssW / w, cssH / h, 1.5);
+        vs.zoom = z;
+        vs.panX = (cssW - (maxX - minX) * z) / 2 - minX * z;
+        vs.panY = (cssH - (maxY - minY) * z) / 2 - minY * z;
+    }
+    PC.fitView = fitView;
+})(PC || (PC = {}));
+
+</script>
+</body>
+</html>
