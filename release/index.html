@@ -16,6 +16,10 @@
     user-select: none;
     -webkit-user-select: none;
   }
+  body {
+    display: flex;
+    flex-direction: column;
+  }
   #titlebar {
     background: linear-gradient(180deg, #F4F4F4, #C8C8C8);
     border-bottom: 1px solid #555;
@@ -27,6 +31,7 @@
     line-height: 16px;
     height: 24px;
     position: relative;
+    flex: 0 0 auto;
   }
   #titlebar::before {
     content: "";
@@ -50,6 +55,8 @@
     padding: 6px 8px;
     display: flex; gap: 4px; align-items: center; flex-wrap: wrap;
     min-height: 36px;
+    flex: 0 0 auto;
+    row-gap: 6px;
   }
   #toolbar button {
     background: linear-gradient(180deg, #FFFFFF, #DDDDDD);
@@ -68,20 +75,23 @@
     box-shadow: inset 0 1px 2px rgba(0,0,0,0.25);
   }
   #toolbar button .ico {
-    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Samsung Color Emoji", sans-serif;
     font-size: 13px;
     margin-right: 2px;
     vertical-align: -1px;
   }
-  #toolbar .spacer { flex: 1; }
+  #toolbar .spacer { flex: 1 1 8px; min-width: 8px; }
   #toolbar .status {
     font-size: 11px; color: #333;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    max-width: 50%;
+    max-width: 40%;
+    flex: 0 1 auto;
   }
   #stage {
-    position: absolute;
-    left: 0; right: 0; top: 60px; bottom: 0;
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
   }
   #canvas {
     display: block;
@@ -1054,6 +1064,10 @@ var PC;
         canvas.addEventListener("wheel", onWheel, { passive: false });
         window.addEventListener("keydown", onKey);
         window.addEventListener("resize", render);
+        if (typeof ResizeObserver !== "undefined") {
+            const ro = new ResizeObserver(() => render());
+            ro.observe(canvas);
+        }
         $("btn-help").addEventListener("click", openHelp);
         $("btn-memo").addEventListener("click", openMemo);
         $("btn-new").addEventListener("click", () => openEditor(null));

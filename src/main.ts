@@ -360,6 +360,11 @@ namespace PC {
     window.addEventListener("keydown", onKey);
     window.addEventListener("resize", render);
 
+    if (typeof ResizeObserver !== "undefined") {
+      const ro = new ResizeObserver(() => render());
+      ro.observe(canvas);
+    }
+
     $("btn-help").addEventListener("click", openHelp);
     $("btn-memo").addEventListener("click", openMemo);
     $("btn-new").addEventListener("click", () => openEditor(null));
