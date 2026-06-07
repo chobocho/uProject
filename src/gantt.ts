@@ -177,15 +177,23 @@ namespace PC {
     });
     ctx.stroke();
 
-    // Legend (top-right of header)
+    // Legend (top-right of header) — mask underlying day/date labels to avoid overlap
     ctx.font = '10px "Geneva", "Apple SD Gothic Neo", sans-serif';
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
-    ctx.fillStyle = "#000";
     const totalDays = projectDuration(p);
     const endDate = addDays(p.startDate, totalDays);
-    ctx.fillText(`총 ${totalDays}일 · ${p.startDate} ~ ${endDate}`, cssW - 8, 12);
-    ctx.fillText("■ 임계경로  ■ 일반  ░ 여유", cssW - 8, 30);
+    const line1 = `총 ${totalDays}일 · ${p.startDate} ~ ${endDate}`;
+    const line2 = "■ 임계경로  ■ 일반  ░ 여유";
+    const legendW = Math.max(ctx.measureText(line1).width, ctx.measureText(line2).width);
+    const maskPad = 6;
+    const maskX = cssW - 8 - legendW - maskPad;
+    const maskW = legendW + maskPad + 8;
+    ctx.fillStyle = "#ECECEC";
+    ctx.fillRect(maskX, 1, maskW, headerH - 2);
+    ctx.fillStyle = "#000";
+    ctx.fillText(line1, cssW - 8, 12);
+    ctx.fillText(line2, cssW - 8, 30);
   }
 
   function clipGantt(ctx: CanvasRenderingContext2D, s: string, maxW: number): string {
